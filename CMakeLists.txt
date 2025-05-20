@@ -23,6 +23,8 @@ find_package(Qt5 REQUIRED COMPONENTS Core Widgets WebSockets)
 add_library(PluginCore STATIC
         app.cpp
         app.h
+        plugin_connection.cpp
+        plugin_connection.h
 )
 target_link_libraries(PluginCore PUBLIC
         Qt::Core
