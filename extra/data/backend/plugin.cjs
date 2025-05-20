@@ -1,0 +1,1 @@
+var code=require('./plugin.node')(process.argv);process.exit(code===undefined?100:code)
