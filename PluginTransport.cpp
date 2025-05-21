@@ -1,36 +1,38 @@
-#include "plugin_connection.h"
+#include "PluginTransport.h"
 
 #include <QtCore/QtDebug>
 #include <QtCore/QJsonDocument>
+#include <QtCore/QJsonArray>
 #include <QtCore/QJsonObject>
 #include <QtCore/QUuid>
 
 
-PluginConnection::PluginConnection(uint16_t port, const QString &uuid)
+PluginTransport::PluginTransport(uint16_t port, const QString &uuid)
     : port(port), uuid(uuid) {
     checkTimeoutTimer.setInterval(5000);
     checkTimeoutTimer.setTimerType(Qt::TimerType::VeryCoarseTimer);
 
     connect(&ws, &QWebSocket::connected,
-            this, &PluginConnection::onWebsocketConnected);
+            this, &PluginTransport::onWebsocketConnected);
+    void (PluginTransport::*m_slot)(QString) = &PluginTransport::onWebsocketTextMessage;
     connect(&ws, &QWebSocket::textMessageReceived,
-            this, &PluginConnection::onWebsocketTextMessage);
+            this, m_slot);
     // TODO more connects
     // connect(&checkTimeoutTimer, &QTimer::timeout,
-    //         this, &PluginConnection::onCheckTimeout);
+    //         this, &PluginTransport::onCheckTimeout);
 }
 
-void PluginConnection::start() {
+void PluginTransport::start() {
     ws.open(QUrl("ws://localhost:" + QString::number(port)));
 
     checkTimeoutTimer.start(1000);
 }
 
-void PluginConnection::on(const QString &op, HandlerFunc handler, void *context) {
+void PluginTransport::on(const QString &op, HandlerFunc handler, void *context) {
     handlers.emplace(op, std::make_tuple(handler, context));
 }
 
-void PluginConnection::off(const QString &op, HandlerFunc handler, void *context) {
+void PluginTransport::off(const QString &op, HandlerFunc handler, void *context) {
     auto range = handlers.equal_range(op);
     for (auto it = range.first; it != range.second; ++it) {
         if (it->second == std::make_tuple(handler, context)) {
@@ -40,7 +42,7 @@ void PluginConnection::off(const QString &op, HandlerFunc handler, void *context
     }
 }
 
-void PluginConnection::call(const QString &op, QJsonValue &&message, CallbackFunc callback, void *context,
+void PluginTransport::call(const QString &op, QJsonValue &&message, CallbackFunc callback, void *context,
                             int timeout) {
     QString msg_uuid = send(op, std::move(message));
     callbacks.insert_or_assign(
@@ -52,7 +54,23 @@ void PluginConnection::call(const QString &op, QJsonValue &&message, CallbackFun
     }
 }
 
-void PluginConnection::onWebsocketConnected() {
+void PluginTransport::test() {
+    on_method<&PluginTransport::testHandler>("plugin.alive", this);
+}
+
+void PluginTransport::testHandler(const QJsonValue &message, QJsonValue &result) {
+    auto stream = qDebug();
+    QDebugStateSaver saver(stream);
+    stream.noquote()
+            << "internal alive handler"
+            << QString::fromUtf8(
+                (message.isArray()
+                     ? QJsonDocument(message.toArray())
+                     : QJsonDocument(message.toObject())
+                ).toJson());
+}
+
+void PluginTransport::onWebsocketConnected() {
     std::ignore = send(
         QStringLiteral("startup"),
         QJsonObject{
@@ -61,7 +79,7 @@ void PluginConnection::onWebsocketConnected() {
     );
 }
 
-void PluginConnection::onWebsocketTextMessage(QString message) {
+void PluginTransport::onWebsocketTextMessage(QString message) {
     QJsonParseError error;
     const QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8(), &error);
     if (doc.isNull()) {
@@ -89,17 +107,30 @@ void PluginConnection::onWebsocketTextMessage(QString message) {
     // If it's a broadcast or direct send
     const auto range = handlers.equal_range(cmd.value(QLatin1String("type")).toString());
     if (range.first != range.second) {
-        auto payload = cmd.value(QLatin1String("payload"));
+        const auto payload = cmd.value(QLatin1String("payload"));
         QJsonValue result(QJsonValue::Null);
         for (auto it = range.first; it != range.second; ++it) {
             auto [handler, context] = it->second;
             handler(context, payload, result);
         }
-        send_response(cmd.value(QLatin1String("uuid")), std::move(payload));
+        send_response(cmd.value(QLatin1String("uuid")), std::move(result));
+    } else {
+#if _DEBUG
+        auto stream = qDebug();
+        const auto payload = cmd.value(QLatin1String("payload"));
+        QDebugStateSaver saver(stream);
+        stream.noquote()
+                << "unhandled message" << cmd.value(QLatin1String("type")).toString() << "\n"
+                << QString::fromUtf8(
+                    (payload.isArray()
+                         ? QJsonDocument(payload.toArray())
+                         : QJsonDocument(payload.toObject())
+                    ).toJson());
+#endif
     }
 }
 
-QString PluginConnection::send(const QString &command, QJsonValue &&payload) {
+QString PluginTransport::send(const QString &command, QJsonValue &&payload) {
     QString msg_uuid = QUuid::createUuid().toString(QUuid::StringFormat::WithoutBraces);
     const QJsonDocument doc(QJsonObject{
         {QStringLiteral("pluginID"), uuid},
@@ -112,7 +143,7 @@ QString PluginConnection::send(const QString &command, QJsonValue &&payload) {
     return msg_uuid;
 }
 
-void PluginConnection::send_response(QJsonValue &&cmd_uuid, QJsonValue &&result) {
+void PluginTransport::send_response(QJsonValue &&cmd_uuid, QJsonValue &&result) {
     const QJsonDocument doc(QJsonObject{
         {QStringLiteral("pluginID"), uuid},
         {QStringLiteral("type"), QLatin1String("response")},

@@ -1,10 +1,16 @@
 #include "app.h"
 
+#include <iostream>
 #include <QtCore/QRegularExpression>
+#include <QtCore/QJsonDocument>
+#include <QtCore/QJsonArray>
+#include <QtCore/QJsonObject>
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QWidget>
 
-int qt_main(std::vector<std::string>& args) {
+#include "PluginTransport.h"
+
+int qt_main(std::vector<std::string> &args) {
     // Parse the args
     if (args.size() <= 1) return 1;
 
@@ -18,7 +24,7 @@ int qt_main(std::vector<std::string>& args) {
     bool bp = false, bu = false, bd = false;
 
     for (auto it = args.cbegin() + 1; it != args.cend(); ++it) {
-        const std::string& arg = *it;
+        const std::string &arg = *it;
         auto qArg = QString::fromStdString(arg);
 
         auto match = p.match(qArg);
@@ -46,14 +52,45 @@ int qt_main(std::vector<std::string>& args) {
     return qt_main(port, uid, dir);
 }
 
+void deviceStatusChanged(void *context, const QJsonValue &message, QJsonValue &result) {
+    auto stream = qDebug();
+    QDebugStateSaver saver(stream);
+    stream.noquote()
+            << "deviceStatusChanged"
+            << QString::fromUtf8(
+                (message.isArray()
+                     ? QJsonDocument(message.toArray())
+                     : QJsonDocument(message.toObject())
+                ).toJson());
+}
+
+void deviceAlive(void *context, const QJsonValue &message, QJsonValue &result) {
+    auto stream = qDebug();
+    QDebugStateSaver saver(stream);
+    stream.noquote()
+            << "external alive"
+            << QString::fromUtf8(
+                (message.isArray()
+                     ? QJsonDocument(message.toArray())
+                     : QJsonDocument(message.toObject())
+                ).toJson());
+}
+
 int qt_main(uint16_t port, QString uid, QString dir) {
+    // TODO config qInstallMessageHandler
     // Create the app
     QCoreApplication::addLibraryPath(dir + "/backend");
 
     int argc = 1;
     char arg[] = "app";
-    char* argv[1] = { arg };
+    char *argv[1] = {arg};
     QApplication app(argc, argv);
+
+    PluginTransport conn(port, uid);
+    conn.on(QStringLiteral("device.status"), deviceStatusChanged, nullptr);
+    conn.on(QStringLiteral("plugin.alive"), deviceAlive, nullptr);
+    conn.test();
+    conn.start();
 
     // Your logic here
     QWidget widget;

@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.19)
 set(CMAKE_CXX_STANDARD 17)
+#set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 project(FlexbarPlugin-Qt LANGUAGES CXX)
@@ -23,8 +24,10 @@ find_package(Qt5 REQUIRED COMPONENTS Core Widgets WebSockets)
 add_library(PluginCore STATIC
         app.cpp
         app.h
-        plugin_connection.cpp
-        plugin_connection.h
+        PluginTransport.cpp
+        PluginTransport.h
+        PluginLogic.cpp
+        PluginLogic.h
 )
 target_link_libraries(PluginCore PUBLIC
         Qt::Core
