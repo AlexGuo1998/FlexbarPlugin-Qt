@@ -55,6 +55,43 @@
           "rangeMin": "0",
           "rangeMax": "100"
         }
+      },
+      {
+        "title": "Slider",
+        "tip": "Slider",
+        "cid": "com.alexguo1998.flexbarplugin-qt.slider",
+        "config": {
+          "keyType": "slider"
+        },
+        "style": {
+          "icon": "mdi mdi-tune-variant",
+          "width": 360,
+          "slider": {
+            "color": "#ffffff",
+            "width": 260,
+            "format": "%f/10",
+            "min": 0,
+            "max": 10,
+            "decimals": 1
+          }
+        },
+        "data": {}
+      },
+      {
+        "title": "Wheel",
+        "tip": "Wheel",
+        "cid": "com.alexguo1998.flexbarplugin-qt.wheel",
+        "config": {
+          "keyType": "wheel"
+        },
+        "style": {
+          "icon": "mdi mdi-tire",
+          "width": 400,
+          "wheel": {
+            "step": 5
+          }
+        },
+        "data": {}
       }
     ]
   },

@@ -12,6 +12,7 @@
 #include "PluginLogic.h"
 #include "PluginTransport.h"
 #include "PluginOperation.h"
+#include "WinGsmtcsmManager.h"
 
 int qt_main(std::vector<std::string> &args) {
     // Parse the args
@@ -55,6 +56,8 @@ int qt_main(std::vector<std::string> &args) {
     return qt_main(port, uid, dir);
 }
 
+// #include "mpris.h"
+
 int qt_main(uint16_t port, const QString &uid, const QString &dir) {
     // TODO config qInstallMessageHandler
     // Create the app
@@ -73,6 +76,7 @@ int qt_main(uint16_t port, const QString &uid, const QString &dir) {
     QWidget widget;
     widget.setWindowTitle("Hello World");
     widget.show();
+    WinGsmtcsmManager plugin;
 
     return app.exec();
 }

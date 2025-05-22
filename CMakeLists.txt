@@ -13,7 +13,7 @@ project(FlexbarPlugin-Qt LANGUAGES CXX)
 set(NODE_API_DIR "extra/node-api-headers/include")
 
 # Qt5 package
-find_package(Qt5 REQUIRED COMPONENTS Core Widgets WebSockets)
+find_package(Qt5 REQUIRED COMPONENTS Core Widgets WebSockets Concurrent)
 
 
 # ========================================
@@ -26,11 +26,15 @@ add_library(PluginCore STATIC
         PluginTransport.cpp PluginTransport.h
         PluginLogic.cpp PluginLogic.h
         PluginOperation.h
+        WinGsmtcsmManager.cpp
+        WinGsmtcsmManager.h
+        mpris.cpp mpris.h
 )
-target_link_libraries(PluginCore PUBLIC
+target_link_libraries(PluginCore PRIVATE
         Qt::Core
         Qt::Widgets
         Qt::WebSockets
+        Qt::Concurrent
 )
 set_target_properties(PluginCore PROPERTIES
         AUTOMOC ON

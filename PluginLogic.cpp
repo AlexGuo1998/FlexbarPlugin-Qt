@@ -12,18 +12,18 @@ PluginLogic::PluginLogic(PluginTransport *transport) : transport(transport) {
 }
 
 void PluginLogic::onDeviceStatus(const QJsonValue &message, QJsonValue &result) {
-    PluginOperation(transport).showSnackbarMessage(
-        "success", "deviceStatusChanged (from FlexbarPlugin-Qt)");
+    // PluginOperation(transport).showSnackbarMessage(
+    //     "success", "deviceStatusChanged (from FlexbarPlugin-Qt)");
 }
 
 void PluginLogic::onPluginAlive(const QJsonValue &message, QJsonValue &result) {
-    do {
-        auto stream = qDebug();
-        QDebugStateSaver saver(stream);
-        stream.noquote()
-                << "alive"
-                << QString::fromUtf8(QJsonDocument(message.toObject()).toJson());
-    } while (false);
+    // do {
+    //     auto stream = qDebug();
+    //     QDebugStateSaver saver(stream);
+    //     stream.noquote()
+    //             << "alive"
+    //             << QString::fromUtf8(QJsonDocument(message.toObject()).toJson());
+    // } while (false);
 
     auto serial = message[QLatin1String("serialNumber")].toString();
     auto keys = message[QLatin1String("keys")].toArray();
