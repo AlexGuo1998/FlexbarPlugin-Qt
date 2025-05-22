@@ -14,18 +14,19 @@ PluginTransport::PluginTransport(uint16_t port, const QString &uuid)
 
     connect(&ws, &QWebSocket::connected,
             this, &PluginTransport::onWebsocketConnected);
-    void (PluginTransport::*m_slot)(QString) = &PluginTransport::onWebsocketTextMessage;
+    connect(&ws, &QWebSocket::disconnected,
+            this, &PluginTransport::onWebsocketDisconnected);
+    connect(&ws, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error),
+            this, &PluginTransport::onWebsocketError);
     connect(&ws, &QWebSocket::textMessageReceived,
-            this, m_slot);
-    // TODO more connects
-    // connect(&checkTimeoutTimer, &QTimer::timeout,
-    //         this, &PluginTransport::onCheckTimeout);
+            this, &PluginTransport::onWebsocketTextMessage);
+
+    connect(&checkTimeoutTimer, &QTimer::timeout,
+            this, &PluginTransport::onTimeoutCheck);
 }
 
 void PluginTransport::start() {
     ws.open(QUrl("ws://localhost:" + QString::number(port)));
-
-    checkTimeoutTimer.start(1000);
 }
 
 void PluginTransport::on(const QString &op, HandlerFunc handler, void *context) {
@@ -42,44 +43,42 @@ void PluginTransport::off(const QString &op, HandlerFunc handler, void *context)
     }
 }
 
-void PluginTransport::call(const QString &op, QJsonValue &&message, CallbackFunc callback, void *context,
-                            int timeout) {
+void PluginTransport::call(
+    const QLatin1String &op, QJsonValue &&message,
+    CallbackFunc callback, void *context,
+    int timeoutMs
+) {
     QString msg_uuid = send(op, std::move(message));
     callbacks.insert_or_assign(
         msg_uuid,
-        std::make_tuple(callback, context,
-                        QDeadlineTimer(timeout ? timeout : QDeadlineTimer::Forever)));
+        std::make_tuple(
+            callback, context,
+            QDeadlineTimer(timeoutMs ? timeoutMs : QDeadlineTimer::Forever,
+                           Qt::TimerType::VeryCoarseTimer)));
     if (!checkTimeoutTimer.isActive()) {
-        checkTimeoutTimer.start(timeout);
+        checkTimeoutTimer.start();
     }
-}
-
-void PluginTransport::test() {
-    on_method<&PluginTransport::testHandler>("plugin.alive", this);
-}
-
-void PluginTransport::testHandler(const QJsonValue &message, QJsonValue &result) {
-    auto stream = qDebug();
-    QDebugStateSaver saver(stream);
-    stream.noquote()
-            << "internal alive handler"
-            << QString::fromUtf8(
-                (message.isArray()
-                     ? QJsonDocument(message.toArray())
-                     : QJsonDocument(message.toObject())
-                ).toJson());
 }
 
 void PluginTransport::onWebsocketConnected() {
     std::ignore = send(
-        QStringLiteral("startup"),
+        QLatin1String("startup"),
         QJsonObject{
-            {QLatin1String("pluginID"), uuid}
+            {QStringLiteral("pluginID"), uuid}
         }
     );
 }
 
-void PluginTransport::onWebsocketTextMessage(QString message) {
+void PluginTransport::onWebsocketDisconnected() {
+    QTimer::singleShot(5000, this, &PluginTransport::start);
+}
+
+void PluginTransport::onWebsocketError(QAbstractSocket::SocketError error) {
+    qCritical() << "Websocket error:" << error;
+    ws.close(QWebSocketProtocol::CloseCodeProtocolError);
+}
+
+void PluginTransport::onWebsocketTextMessage(const QString &message) {
     QJsonParseError error;
     const QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8(), &error);
     if (doc.isNull()) {
@@ -92,14 +91,21 @@ void PluginTransport::onWebsocketTextMessage(QString message) {
     if (const auto it = callbacks.find(cmd.value(QLatin1String("uuid")).toString());
         it != callbacks.end()
     ) {
+        CallbackFunc callback = std::get<0>(it->second);
+        void *context = std::get<1>(it->second);
         callbacks.erase(it);
         if (callbacks.empty()) checkTimeoutTimer.stop();
 
-        auto [callback, context, deadline] = it->second;
-        if (cmd.value(QLatin1String("status")) == QLatin1String("success")) {
-            callback(context, true, cmd.value(QLatin1String("payload")));
+        const bool isSuccess = cmd.value(QLatin1String("status")) == QLatin1String("success");
+        if (callback != nullptr) {
+            callback(context, isSuccess,
+                     isSuccess
+                         ? cmd.value(QLatin1String("payload"))
+                         : cmd.value(QLatin1String("error"))
+            );
         } else {
-            callback(context, false, cmd.value(QLatin1String("error")));
+            if (!isSuccess)
+                qWarning() << "Unhandled call failure:" << message;
         }
         return;
     }
@@ -115,12 +121,12 @@ void PluginTransport::onWebsocketTextMessage(QString message) {
         }
         send_response(cmd.value(QLatin1String("uuid")), std::move(result));
     } else {
-#if _DEBUG
+#ifdef _DEBUG
         auto stream = qDebug();
         const auto payload = cmd.value(QLatin1String("payload"));
         QDebugStateSaver saver(stream);
         stream.noquote()
-                << "unhandled message" << cmd.value(QLatin1String("type")).toString() << "\n"
+                << "Unhandled message" << cmd.value(QLatin1String("type")).toString() << "\n"
                 << QString::fromUtf8(
                     (payload.isArray()
                          ? QJsonDocument(payload.toArray())
@@ -130,8 +136,29 @@ void PluginTransport::onWebsocketTextMessage(QString message) {
     }
 }
 
-QString PluginTransport::send(const QString &command, QJsonValue &&payload) {
-    QString msg_uuid = QUuid::createUuid().toString(QUuid::StringFormat::WithoutBraces);
+void PluginTransport::onTimeoutCheck() {
+    auto it = callbacks.begin();
+    while (it != callbacks.end()) {
+        const QDeadlineTimer &deadline = std::get<2>(it->second);
+        if (deadline.hasExpired()) {
+            CallbackFunc callback = std::get<0>(it->second);
+            void *context = std::get<1>(it->second);
+            if (callback != nullptr) {
+                callback(context, false, QStringLiteral("Request timed out"));
+            } else {
+                qWarning() << "Unhandled request timeout";
+            }
+
+            it = callbacks.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    if (callbacks.empty()) checkTimeoutTimer.stop();
+}
+
+QString PluginTransport::send(const QLatin1String &command, QJsonValue &&payload) {
+    QString msg_uuid = QUuid::createUuid().toString(QUuid::StringFormat::Id128);
     const QJsonDocument doc(QJsonObject{
         {QStringLiteral("pluginID"), uuid},
         {QStringLiteral("type"), command},

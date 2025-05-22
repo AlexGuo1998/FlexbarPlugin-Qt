@@ -22,12 +22,10 @@ find_package(Qt5 REQUIRED COMPONENTS Core Widgets WebSockets)
 
 # PluginCore: where all the logic lives
 add_library(PluginCore STATIC
-        app.cpp
-        app.h
-        PluginTransport.cpp
-        PluginTransport.h
-        PluginLogic.cpp
-        PluginLogic.h
+        app.cpp app.h
+        PluginTransport.cpp PluginTransport.h
+        PluginLogic.cpp PluginLogic.h
+        PluginOperation.h
 )
 target_link_libraries(PluginCore PUBLIC
         Qt::Core

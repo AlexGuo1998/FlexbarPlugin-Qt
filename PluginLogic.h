@@ -1,5 +1,7 @@
 #pragma once
-#include <QObject>
+#include <QtCore/QObject>
+
+#include "PluginOperation.h"
 
 class PluginTransport;
 
@@ -10,6 +12,9 @@ public:
     explicit PluginLogic(PluginTransport *transport);
 
 private:
-    void onConnect(PluginTransport *transport);
+    void onDeviceStatus(const QJsonValue &message, QJsonValue &result);
+
+    void onPluginAlive(const QJsonValue &message, QJsonValue &result);
+
     PluginTransport *transport;
 };
