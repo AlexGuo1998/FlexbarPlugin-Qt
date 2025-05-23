@@ -73,10 +73,11 @@ int qt_main(uint16_t port, const QString &uid, const QString &dir) {
     PluginLogic logic(&transport);
     transport.start();
 
+    WinGsmtcsmManager manager;
+    QObject::connect(&manager, &WinGsmtcsmManager::infoUpdated, &logic, &PluginLogic::onMediaInfoUpdate);
     QWidget widget;
     widget.setWindowTitle("Hello World");
     widget.show();
-    WinGsmtcsmManager plugin;
 
     return app.exec();
 }
