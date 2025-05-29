@@ -8,34 +8,8 @@ project(FlexbarPlugin-Qt LANGUAGES CXX)
 # Dependencies
 # ========================================
 
-# Install Node-API header to builddir/node-headers/
-set(NODE_WORKDIR "${CMAKE_BINARY_DIR}/node-headers")
-file(MAKE_DIRECTORY "${NODE_WORKDIR}")
-file(COPY
-        "extra/package.json"
-        "extra/package-lock.json"
-        DESTINATION ${NODE_WORKDIR}
-)
-
-set(NPM_CMD npm)
-if (WIN32)
-    # workaround for windows, without this the npm command will returns immediately
-    set(NPM_CMD cmd /Q /C npm)
-endif ()
-execute_process(
-        COMMAND ${NPM_CMD} ci --no-audit
-        WORKING_DIRECTORY ${NODE_WORKDIR}
-        COMMAND_ERROR_IS_FATAL ANY
-)
-
-# Get header dir
-execute_process(
-        COMMAND node -p "require('node-api-headers').include_dir"
-        WORKING_DIRECTORY ${NODE_WORKDIR}
-        OUTPUT_VARIABLE NODE_API_DIR
-        COMMAND_ERROR_IS_FATAL ANY
-)
-string(REGEX REPLACE "[\r\n\"]" "" NODE_API_DIR ${NODE_API_DIR})
+# Node-API header from git submodule
+set(NODE_API_DIR "extra/node-api-headers/include")
 
 # Qt5 package
 find_package(Qt5 REQUIRED COMPONENTS Core Widgets WebSockets)

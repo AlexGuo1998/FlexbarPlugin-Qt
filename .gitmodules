@@ -1,0 +1,3 @@
+[submodule "node-api-headers"]
+	path = extra/node-api-headers
+	url = https://github.com/nodejs/node-api-headers.git
